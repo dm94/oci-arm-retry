@@ -10,6 +10,7 @@ concurrency:
 jobs:
   retry:
     runs-on: ubuntu-latest
+    environment: or           # GitHub Environment whose variables/secrets override repository-level ones
     timeout-minutes: 355      # Close to GitHub Actions 6-hour limit
     permissions:
       actions: write          # Lets the built-in GITHUB_TOKEN trigger the next Job / disable this workflow
