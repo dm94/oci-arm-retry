@@ -1,3 +1,4 @@
+import os
 import oci
 import time
 import datetime
@@ -11,14 +12,38 @@ import datetime
 # ╚══════════════════════════════════════════════════════╝
 
 # ─── Configuration ───────────────────────────────────────
-COMPARTMENT_ID = (
-    "ocid1.tenancy.oc1..aaaaaaaaaqij5zlnm3v5qprvdll3j7nc6o3dk4ykzerugzxe37ckajkpjxpa"  # Replace with your tenancy OCID
-)
-SSH_PUBLIC_KEY = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxPqVeut2vbwt8VVAvHDnEN+q61jrIAGD9cQgW6kTeLCjjzm9UHt2Flf1KoohSu+0YFvSn8+t67r9T9wfdP14WBfZAg531CCyUNTbF5KmkaHgmxftWu3FgY00BTnGa4YEEXdAGn3X953HzFKJDpJVJyWFfWXJUOWdfivTKlO+62SBnlIdcanckwA6rzr9dXNSYlasoVnuk+ujANjhnxf4TpKcI4AQrAmRJQ83lXfI2yExBMX+Qx/JNSA2/2XFRfT7OMgddExibCRpSyammfatNLUIM5s+ab6aeO3aNvVWGok6/dpYaBPbvndERQs6p9FQr88C/VFeEwHCtvMT8c2WB ssh-key-2026-03-07"  # Replace with your SSH public key (.pub file content)
-INSTANCE_NAME = "micro-server"  # Change for each new instance (e.g. "micro-server-2" for a second one)
-UBUNTU_VERSION = "24.04"  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
-BOOT_VOLUME_SIZE_IN_GBS = 50
-RETRY_INTERVAL = 90  # seconds
+# Account-specific values are read from environment variables, so this file can
+# be committed/shared without your tenancy OCID or SSH key inside it.
+#   [GitHub Actions] Set repository variables (or secrets) on the repo:
+#     OCI_COMPARTMENT_ID, OCI_SSH_PUBLIC_KEY — see README.md
+#   [Local] Export them in your shell before running, e.g.:
+#     Linux/macOS: export OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..xxxx"
+#                  export OCI_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_rsa.pub)"
+#     PowerShell:  $env:OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..xxxx"
+#                  $env:OCI_SSH_PUBLIC_KEY=Get-Content ~/.ssh/id_rsa.pub -Raw
+COMPARTMENT_ID = os.environ.get("OCI_COMPARTMENT_ID", "").strip()
+SSH_PUBLIC_KEY = os.environ.get("OCI_SSH_PUBLIC_KEY", "").strip()
+
+# Optional overrides — the defaults below are used when the variable is unset.
+INSTANCE_NAME = (
+    os.environ.get("OCI_INSTANCE_NAME") or "micro-server"
+)  # Change for each new instance (e.g. "micro-server-2" for a second one)
+UBUNTU_VERSION = (
+    os.environ.get("OCI_UBUNTU_VERSION") or "24.04"
+)  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
+BOOT_VOLUME_SIZE_IN_GBS = int(os.environ.get("OCI_BOOT_VOLUME_SIZE_IN_GBS") or 50)
+RETRY_INTERVAL = int(os.environ.get("OCI_RETRY_INTERVAL") or 90)  # seconds
+
+if not COMPARTMENT_ID:
+    raise SystemExit(
+        "Missing OCI_COMPARTMENT_ID. Set it as a repository variable/secret in "
+        "GitHub Actions, or export it in your shell when running locally."
+    )
+if not SSH_PUBLIC_KEY:
+    raise SystemExit(
+        "Missing OCI_SSH_PUBLIC_KEY. Set it as a repository variable/secret in "
+        "GitHub Actions, or export it in your shell when running locally."
+    )
 # ────────────────────────────────────────────────────────
 
 # ─── OCI Authentication ──────────────────────────────────
@@ -128,7 +153,10 @@ def create_vcn_and_subnet():
 
     # Check if subnet already exists
     subnets = network.list_subnets(
-        COMPARTMENT_ID, vcn_id=vcn.id, display_name="retry-subnet-micro", retry_strategy=retry
+        COMPARTMENT_ID,
+        vcn_id=vcn.id,
+        display_name="retry-subnet-micro",
+        retry_strategy=retry,
     ).data
     if subnets:
         subnet = subnets[0]

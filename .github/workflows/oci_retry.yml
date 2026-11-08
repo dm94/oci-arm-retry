@@ -64,6 +64,18 @@ jobs:
         continue-on-error: true
         env:
           PYTHONUNBUFFERED: "1"
+          # Account-specific config. Set these as repository VARIABLES
+          # (Settings > Secrets and variables > Actions > Variables); storing them
+          # as secrets also works, variables are just easier to read/edit.
+          OCI_COMPARTMENT_ID: ${{ vars.OCI_COMPARTMENT_ID || secrets.OCI_COMPARTMENT_ID }}
+          OCI_SSH_PUBLIC_KEY: ${{ vars.OCI_SSH_PUBLIC_KEY || secrets.OCI_SSH_PUBLIC_KEY }}
+          # Optional overrides — leave unset to use the defaults in the script.
+          OCI_INSTANCE_NAME: ${{ vars.OCI_INSTANCE_NAME }}
+          OCI_UBUNTU_VERSION: ${{ vars.OCI_UBUNTU_VERSION }}
+          OCI_ARM_OCPUS: ${{ vars.OCI_ARM_OCPUS }}
+          OCI_ARM_MEMORY_IN_GBS: ${{ vars.OCI_ARM_MEMORY_IN_GBS }}
+          OCI_BOOT_VOLUME_SIZE_IN_GBS: ${{ vars.OCI_BOOT_VOLUME_SIZE_IN_GBS }}
+          OCI_RETRY_INTERVAL: ${{ vars.OCI_RETRY_INTERVAL }}
         run: |
           set +e
           timeout 19800 python oci_retry.py
@@ -95,7 +107,7 @@ jobs:
         env:
           EXIT_CODE: ${{ steps.run_script.outputs.exit_code }}
         run: |
-          echo "::error title=Script error::The retry script stopped with exit code $EXIT_CODE before its time limit, so the next Job was not triggered. Check the 'Run OCI retry script' log (e.g. secrets or OCIDs), fix the problem, then click Run workflow again."
+          echo "::error title=Script error::The retry script stopped with exit code $EXIT_CODE before its time limit, so the next Job was not triggered. Check the 'Run OCI retry script' log (e.g. secrets, repository variables or OCIDs), fix the problem, then click Run workflow again."
           exit 1
 
       - name: Trigger next Job (seamless relay)

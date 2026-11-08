@@ -1,3 +1,4 @@
+import os
 import oci
 import time
 import datetime
@@ -11,16 +12,38 @@ import datetime
 # ╚══════════════════════════════════════════════════════╝
 
 # ─── Configuration ───────────────────────────────────────
-COMPARTMENT_ID = (
-    "ocid1.tenancy.oc1..aaaaaaaaaqij5zlnm3v5qprvdll3j7nc6o3dk4ykzerugzxe37ckajkpjxpa"  # Replace with your tenancy OCID
-)
-SSH_PUBLIC_KEY = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdsLT/y7kupelr7rr+NcIyPVb4ZC20x9L5VuNMC5aYlXmSuqJQemXzdzfvp5F899CNdBe+TJJ+w55ka6C5J8vZTMmT4IfIOKZdJsKaTwOCbYTRz62PLcq90veNBPdn0kcnUxrqD3ReKxkKhyyL9WIWH1+4e945w9TL2wgr7Os0rYN5q/4Sa6ioof1I4NE9lGw+WL2yjOI0YLQXmWnvRb7qcQUdOCxgbOXw3GsPFwp3UZ+yJm8kbwFzJdTojaUeriuk3HQYFjzaOVN07kmf2vTQKSgsyw5B+BhyeYQmcRtNTNiriZ7skfS06/24ZM/hzLBz7/PQgw0DoRHDWB5YbyT1 ssh-key-2026-03-05"  # Replace with your SSH public key (.pub file content)
-INSTANCE_NAME = "arm-server"
-UBUNTU_VERSION = "24.04"  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
-ARM_OCPUS = 2
-ARM_MEMORY_IN_GBS = 12
-BOOT_VOLUME_SIZE_IN_GBS = 100
-RETRY_INTERVAL = 90  # seconds
+# Account-specific values are read from environment variables, so this file can
+# be committed/shared without your tenancy OCID or SSH key inside it.
+#   [GitHub Actions] Set repository variables (or secrets) on the repo:
+#     OCI_COMPARTMENT_ID, OCI_SSH_PUBLIC_KEY — see README.md
+#   [Local] Export them in your shell before running, e.g.:
+#     Linux/macOS: export OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..xxxx"
+#                  export OCI_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_rsa.pub)"
+#     PowerShell:  $env:OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..xxxx"
+#                  $env:OCI_SSH_PUBLIC_KEY=Get-Content ~/.ssh/id_rsa.pub -Raw
+COMPARTMENT_ID = os.environ.get("OCI_COMPARTMENT_ID", "").strip()
+SSH_PUBLIC_KEY = os.environ.get("OCI_SSH_PUBLIC_KEY", "").strip()
+
+# Optional overrides — the defaults below are used when the variable is unset.
+INSTANCE_NAME = os.environ.get("OCI_INSTANCE_NAME") or "arm-server"
+UBUNTU_VERSION = (
+    os.environ.get("OCI_UBUNTU_VERSION") or "24.04"
+)  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
+ARM_OCPUS = int(os.environ.get("OCI_ARM_OCPUS") or 2)
+ARM_MEMORY_IN_GBS = int(os.environ.get("OCI_ARM_MEMORY_IN_GBS") or 12)
+BOOT_VOLUME_SIZE_IN_GBS = int(os.environ.get("OCI_BOOT_VOLUME_SIZE_IN_GBS") or 100)
+RETRY_INTERVAL = int(os.environ.get("OCI_RETRY_INTERVAL") or 90)  # seconds
+
+if not COMPARTMENT_ID:
+    raise SystemExit(
+        "Missing OCI_COMPARTMENT_ID. Set it as a repository variable/secret in "
+        "GitHub Actions, or export it in your shell when running locally."
+    )
+if not SSH_PUBLIC_KEY:
+    raise SystemExit(
+        "Missing OCI_SSH_PUBLIC_KEY. Set it as a repository variable/secret in "
+        "GitHub Actions, or export it in your shell when running locally."
+    )
 # ────────────────────────────────────────────────────────
 
 # ─── OCI Authentication ──────────────────────────────────

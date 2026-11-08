@@ -40,43 +40,62 @@ Both shapes are part of the Oracle Always Free tier. Always Free instances and v
 
 ## Script Configuration
 
-Open the script and edit the variables at the top:
+Both scripts read their account-specific values from **environment variables**,
+so the files never contain your OCID or SSH key:
 
-> ⚠️ **Replace `COMPARTMENT_ID` and `SSH_PUBLIC_KEY` with your own values.**
+| Environment variable | Required | Default (ARM / Micro) |
+|----------------------|----------|-----------------------|
+| `OCI_COMPARTMENT_ID` | ✅ | — |
+| `OCI_SSH_PUBLIC_KEY` | ✅ | — |
+| `OCI_INSTANCE_NAME` | ❌ | `arm-server` / `micro-server` |
+| `OCI_UBUNTU_VERSION` | ❌ | `24.04` |
+| `OCI_ARM_OCPUS` | ❌ | `2` (ARM only) |
+| `OCI_ARM_MEMORY_IN_GBS` | ❌ | `12` (ARM only) |
+| `OCI_BOOT_VOLUME_SIZE_IN_GBS` | ❌ | `100` / `50` |
+| `OCI_RETRY_INTERVAL` | ❌ | `90` |
+
+In GitHub Actions they are set from repository variables/secrets (see Step 3);
+locally, export them before running (see Run Locally).
 
 ### ARM script: `oci_retry.py`
 
-```python
-COMPARTMENT_ID = "ocid1.tenancy.oc1..your-ocid"
-SSH_PUBLIC_KEY = "ssh-rsa AAAA...your-public-key"
-INSTANCE_NAME = "arm-server"
-UBUNTU_VERSION = "24.04"  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
-ARM_OCPUS = 2
-ARM_MEMORY_IN_GBS = 12
-BOOT_VOLUME_SIZE_IN_GBS = 100
-RETRY_INTERVAL = 90  # Retry interval in seconds
+```bash
+# Required — set as GitHub variables/secrets, or export locally
+OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..your-ocid"
+OCI_SSH_PUBLIC_KEY="ssh-rsa AAAA...your-public-key"
+
+# Optional overrides (defaults shown)
+OCI_INSTANCE_NAME="arm-server"
+OCI_UBUNTU_VERSION="24.04"         # OS for the new instance: "24.04" (default), "26.04" or "22.04"
+OCI_ARM_OCPUS=2
+OCI_ARM_MEMORY_IN_GBS=12
+OCI_BOOT_VOLUME_SIZE_IN_GBS=100
+OCI_RETRY_INTERVAL=90              # Retry interval in seconds
 ```
 
-> `BOOT_VOLUME_SIZE_IN_GBS` sets the boot volume size. Always Free includes `200 GB` of boot + block volume storage in total; the ARM default of `100 GB` leaves room for two Micro instances (`50 GB` each). Lower `BOOT_VOLUME_SIZE_IN_GBS` if you also use other volumes.
+> `OCI_BOOT_VOLUME_SIZE_IN_GBS` sets the boot volume size. Always Free includes `200 GB` of boot + block volume storage in total; the ARM default of `100 GB` leaves room for two Micro instances (`50 GB` each). Lower it if you also use other volumes.
 
 ### Micro script: `oci_retry_micro.py`
 
-```python
-COMPARTMENT_ID = "ocid1.tenancy.oc1..your-ocid"
-SSH_PUBLIC_KEY = "ssh-rsa AAAA...your-public-key"
-INSTANCE_NAME  = "micro-server"   # Change to "micro-server-2" when claiming your second Micro instance
-UBUNTU_VERSION = "24.04"  # OS for the new instance: "24.04" (default), "26.04" or "22.04"
-BOOT_VOLUME_SIZE_IN_GBS = 50
-RETRY_INTERVAL = 90  # Retry interval in seconds
+```bash
+# Required — set as GitHub variables/secrets, or export locally
+OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..your-ocid"
+OCI_SSH_PUBLIC_KEY="ssh-rsa AAAA...your-public-key"
+
+# Optional overrides (defaults shown)
+OCI_INSTANCE_NAME="micro-server"   # Change to "micro-server-2" when claiming your second Micro instance
+OCI_UBUNTU_VERSION="24.04"         # OS for the new instance: "24.04" (default), "26.04" or "22.04"
+OCI_BOOT_VOLUME_SIZE_IN_GBS=50
+OCI_RETRY_INTERVAL=90              # Retry interval in seconds
 ```
 
-> Each OCI account can have up to **2 free Micro instances**. To claim a second one, change `INSTANCE_NAME` to a different value (e.g. `"micro-server-2"`) so both instances can be identified separately in the OCI Console. The VCN and subnet are shared between instances automatically.
+> Each OCI account can have up to **2 free Micro instances**. To claim a second one, set `OCI_INSTANCE_NAME` to a different value (e.g. `"micro-server-2"`) so both instances can be identified separately in the OCI Console. The VCN and subnet are shared between instances automatically.
 
 > ⚠️ **Regions with multiple availability domains (ADs):** Oracle's [Always Free page](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm) states that Micro instances "can only be created in one availability domain", but does not say which one. The scripts always use the **first** AD returned by the API (`ads[0]` in `get_availability_domain()`). If your region has several ADs and the Micro script never succeeds, check your Micro limit per AD in the OCI Console (search for **Limits, Quotas and Usage**), then change `ads[0]` to the index of that AD. Regions with a single AD (e.g. `ap-singapore-1`) are not affected.
 
 ### Ubuntu version (both scripts)
 
-`UBUNTU_VERSION` sets which Ubuntu LTS is installed on the **new** instance. The script always picks the newest Oracle image build of that version. Changing it only affects instances created afterwards; instances you already have keep their OS.
+`OCI_UBUNTU_VERSION` sets which Ubuntu LTS is installed on the **new** instance. The script always picks the newest Oracle image build of that version. Changing it only affects instances created afterwards; instances you already have keep their OS.
 
 | Version | Standard security updates until | Default Python |
 |---------|-------------------------------|----------------|
@@ -114,12 +133,18 @@ Or generate your own key locally with `ssh-keygen`.
 # Install dependencies (once only)
 pip install oci
 
+# Set the required environment variables (needed by both scripts)
+export OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..your-ocid"
+export OCI_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_rsa.pub)"
+
 # Run ARM version
 python oci_retry.py
 
 # Run Micro version
 python oci_retry_micro.py
 ```
+
+> On Windows PowerShell, set them with `$env:OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..your-ocid"` and `$env:OCI_SSH_PUBLIC_KEY=Get-Content ~\.ssh\id_rsa.pub -Raw`.
 
 ### Local OCI Config File Required
 
@@ -203,7 +228,7 @@ Create a **public** repository (public repos get unlimited Actions minutes).
 4. Click **Add** → from the configuration snippet, note these values:
    - `user`, `fingerprint`, `tenancy`, `region`
 
-### Step 3: Set GitHub Secrets
+### Step 3: Set GitHub Secrets and Variables
 
 Go to your repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
@@ -216,6 +241,24 @@ You need **5 secrets** in total:
 | `OCI_TENANCY` | `ocid1.tenancy.oc1..xxxxxx` | Oracle Console → top-right **Profile** menu → **Tenancy: &lt;name&gt;** → OCID |
 | `OCI_REGION` | e.g. `ap-singapore-1` | Your **home region**: click the region name at the top right of the Oracle Console; the menu shows **Home region** (e.g. `Singapore (Singapore)`). Enter its Region Identifier (e.g. `ap-singapore-1`, see the [region list](https://docs.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm)). Always Free resources can only be created there |
 | `OCI_PRIVATE_KEY` | Full contents of `.pem` file | Open the `.pem` from Step 2, copy everything (including `-----BEGIN/END PRIVATE KEY-----`) |
+
+#### Workflows: repository variables
+
+Both workflows (`oci_retry.yml` and `oci_retry_micro.yml`) need two values that
+are **not secrets**. Add them on the **Variables** tab (same menu → **Variables**
+→ **New repository variable**):
+
+| Variable Name | Value |
+|---------------|-------|
+| `OCI_COMPARTMENT_ID` | Tenancy OCID (see [Get Compartment ID](#get-compartment-id-tenancy-ocid)) |
+| `OCI_SSH_PUBLIC_KEY` | Full contents of your `.pub` file |
+
+> These two can be stored as secrets instead if you prefer — the workflows read
+> the variable first and fall back to the secret. Optional variables
+> (`OCI_INSTANCE_NAME`, `OCI_UBUNTU_VERSION`, `OCI_ARM_OCPUS`,
+> `OCI_ARM_MEMORY_IN_GBS`, `OCI_BOOT_VOLUME_SIZE_IN_GBS`, `OCI_RETRY_INTERVAL`)
+> override the script defaults. They are shared by both workflows, so leave them
+> unset unless you really need a different value than the default.
 
 > No GitHub token is needed: relaying to the next Job and auto-disabling use the workflow's built-in `GITHUB_TOKEN`, which GitHub creates for each Job automatically.
 
@@ -251,7 +294,7 @@ ssh -i private-key.pem ubuntu@your-public-ip
 
 ## Notes
 
-- `COMPARTMENT_ID` and `SSH_PUBLIC_KEY` in the script are safe to commit (non-sensitive)
+- `COMPARTMENT_ID` and `SSH_PUBLIC_KEY` are non-sensitive, so they are safe to store as repository variables (or secrets); neither script contains them
 - Sensitive values (OCI API private key) are stored in GitHub Secrets and never committed
 - **Change on November 7, 2026:** the workflows no longer use a `GH_PAT` secret. If you forked or copied this repo before that date, replace your `.github/workflows/oci_retry.yml` and `.github/workflows/oci_retry_micro.yml` with the current versions from this repo (the scripts don't need to change). After that, you can delete the `GH_PAT` secret and revoke the token in GitHub → Settings → Developer settings
 - `.pem` / `.key` / `.pub` files are in `.gitignore` and won't be tracked
@@ -293,43 +336,60 @@ ssh -i private-key.pem ubuntu@your-public-ip
 
 ## 腳本設定
 
-開啟腳本，修改最上方的變數：
+兩支腳本的帳號相關設定都從**環境變數**讀取，腳本裡不會再出現你的 OCID 或 SSH 金鑰：
 
-> ⚠️ **請把 `COMPARTMENT_ID` 和 `SSH_PUBLIC_KEY` 換成你自己的值。**
+| 環境變數 | 必填 | 預設值（ARM / Micro） |
+|----------|------|----------------------|
+| `OCI_COMPARTMENT_ID` | ✅ | — |
+| `OCI_SSH_PUBLIC_KEY` | ✅ | — |
+| `OCI_INSTANCE_NAME` | ❌ | `arm-server` / `micro-server` |
+| `OCI_UBUNTU_VERSION` | ❌ | `24.04` |
+| `OCI_ARM_OCPUS` | ❌ | `2`（僅 ARM） |
+| `OCI_ARM_MEMORY_IN_GBS` | ❌ | `12`（僅 ARM） |
+| `OCI_BOOT_VOLUME_SIZE_IN_GBS` | ❌ | `100` / `50` |
+| `OCI_RETRY_INTERVAL` | ❌ | `90` |
+
+在 GitHub Actions 由 repository variables/secrets 提供（見 Step 3）；本機執行則在執行前先設定環境變數（見「本機執行」）。
 
 ### ARM 腳本：`oci_retry.py`
 
-```python
-COMPARTMENT_ID = "ocid1.tenancy.oc1..你的OCID"
-SSH_PUBLIC_KEY = "ssh-rsa AAAA...你的公開金鑰內容"
-INSTANCE_NAME = "arm-server"
-UBUNTU_VERSION = "24.04"  # 新機器安裝的作業系統："24.04"（預設）、"26.04" 或 "22.04"
-ARM_OCPUS = 2
-ARM_MEMORY_IN_GBS = 12
-BOOT_VOLUME_SIZE_IN_GBS = 100
-RETRY_INTERVAL = 90  # 重試間隔（秒）
+```bash
+# 必填：在 GitHub 設成 variables/secrets，或在本機執行前 export
+OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..你的OCID"
+OCI_SSH_PUBLIC_KEY="ssh-rsa AAAA...你的公開金鑰內容"
+
+# 選填（顯示的是預設值）
+OCI_INSTANCE_NAME="arm-server"
+OCI_UBUNTU_VERSION="24.04"         # 新機器安裝的作業系統："24.04"（預設）、"26.04" 或 "22.04"
+OCI_ARM_OCPUS=2
+OCI_ARM_MEMORY_IN_GBS=12
+OCI_BOOT_VOLUME_SIZE_IN_GBS=100
+OCI_RETRY_INTERVAL=90              # 重試間隔（秒）
 ```
 
-> `BOOT_VOLUME_SIZE_IN_GBS` 是開機磁碟（boot volume）的大小。Always Free 的 boot volume + block volume 儲存空間合計 `200 GB`；ARM 預設 `100 GB`，剩下的空間剛好夠兩台 Micro（各 `50 GB`）。如果你還有其他磁碟，請把 `BOOT_VOLUME_SIZE_IN_GBS` 調小。
+> `OCI_BOOT_VOLUME_SIZE_IN_GBS` 是開機磁碟（boot volume）的大小。Always Free 的 boot volume + block volume 儲存空間合計 `200 GB`；ARM 預設 `100 GB`，剩下的空間剛好夠兩台 Micro（各 `50 GB`）。如果你還有其他磁碟，請把它調小。
 
 ### Micro 腳本：`oci_retry_micro.py`
 
-```python
-COMPARTMENT_ID = "ocid1.tenancy.oc1..你的OCID"
-SSH_PUBLIC_KEY = "ssh-rsa AAAA...你的公開金鑰內容"
-INSTANCE_NAME  = "micro-server"   # 搶第二台時改成 "micro-server-2"，方便在 OCI Console 區分
-UBUNTU_VERSION = "24.04"  # 新機器安裝的作業系統："24.04"（預設）、"26.04" 或 "22.04"
-BOOT_VOLUME_SIZE_IN_GBS = 50
-RETRY_INTERVAL = 90  # 重試間隔（秒）
+```bash
+# 必填：在 GitHub 設成 variables/secrets，或在本機執行前 export
+OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..你的OCID"
+OCI_SSH_PUBLIC_KEY="ssh-rsa AAAA...你的公開金鑰內容"
+
+# 選填（顯示的是預設值）
+OCI_INSTANCE_NAME="micro-server"   # 搶第二台時改成 "micro-server-2"，方便在 OCI Console 區分
+OCI_UBUNTU_VERSION="24.04"         # 新機器安裝的作業系統："24.04"（預設）、"26.04" 或 "22.04"
+OCI_BOOT_VOLUME_SIZE_IN_GBS=50
+OCI_RETRY_INTERVAL=90              # 重試間隔（秒）
 ```
 
-> 每個 OCI 帳號最多可以有 **2 台免費 Micro**。搶第二台時，將 `INSTANCE_NAME` 改成不同的名稱（例如 `"micro-server-2"`），方便在 OCI Console 區分。VCN 和子網路會自動共用，不需要另外建立。
+> 每個 OCI 帳號最多可以有 **2 台免費 Micro**。搶第二台時，將 `OCI_INSTANCE_NAME` 設成不同的名稱（例如 `"micro-server-2"`），方便在 OCI Console 區分。VCN 和子網路會自動共用，不需要另外建立。
 
 > ⚠️ **有多個可用性網域（AD）的區域：** Oracle 官方 [Always Free 頁面](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)寫明 Micro 只能在其中一個 AD 建立，但沒有說是哪一個。腳本一律使用 API 回傳的**第一個** AD（`get_availability_domain()` 裡的 `ads[0]`）。如果你的區域有多個 AD，而 Micro 腳本一直搶不到，請到 OCI 主控台搜尋 **Limits, Quotas and Usage**，查看 Micro 的額度分配在哪個 AD，再把 `ads[0]` 改成那個 AD 的順序編號。只有一個 AD 的區域（例如 `ap-singapore-1`）不受影響。
 
 ### Ubuntu 版本（兩支腳本通用）
 
-`UBUNTU_VERSION` 決定**新建立的機器**要安裝哪一版 Ubuntu LTS，腳本會自動挑該版本在 Oracle 上最新的映像檔。修改這個值只影響之後新建的機器，已經在運作的機器不會被改變。
+`OCI_UBUNTU_VERSION` 決定**新建立的機器**要安裝哪一版 Ubuntu LTS，腳本會自動挑該版本在 Oracle 上最新的映像檔。修改這個值只影響之後新建的機器，已經在運作的機器不會被改變。
 
 | 版本 | 標準安全更新到 | 內建 Python |
 |------|--------------|------------|
@@ -367,12 +427,18 @@ RETRY_INTERVAL = 90  # 重試間隔（秒）
 # 安裝套件（只需一次）
 pip install oci
 
+# 先設定必填的環境變數（兩支腳本都需要）
+export OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..你的OCID"
+export OCI_SSH_PUBLIC_KEY="$(cat ~/.ssh/id_rsa.pub)"
+
 # 執行 ARM 版
 python oci_retry.py
 
 # 執行 Micro 版
 python oci_retry_micro.py
 ```
+
+> Windows PowerShell 請改用 `$env:OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..你的OCID"` 和 `$env:OCI_SSH_PUBLIC_KEY=Get-Content ~\.ssh\id_rsa.pub -Raw`。
 
 ### 本機執行需要 OCI 設定檔
 
@@ -456,7 +522,7 @@ Job 開始
 4. 按「新增」後複製出現的設定文字，從中取得以下值：
    - `user`、`fingerprint`、`tenancy`、`region`
 
-### Step 3：設定 GitHub Secrets
+### Step 3：設定 GitHub Secrets 與 Variables
 
 到倉庫 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
@@ -469,6 +535,21 @@ Job 開始
 | `OCI_TENANCY` | `ocid1.tenancy.oc1..xxxxxx` | OCI 主控台 → 右上角 **Profile** 選單 → **租用戶: &lt;名稱&gt;** → OCID |
 | `OCI_REGION` | 例如 `ap-singapore-1` | 你的**主區域**：點 OCI 主控台右上角的區域名稱，選單會標出 **Home region**（例如 `Singapore (Singapore)`），填入它的區域識別碼（例如 `ap-singapore-1`，見[區域列表](https://docs.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm)）。Always Free 資源只能建立在主區域 |
 | `OCI_PRIVATE_KEY` | `.pem` 檔案完整內容 | 開啟 Step 2 下載的 `.pem` 檔，複製全部文字（含頭尾 `-----BEGIN/END PRIVATE KEY-----`）|
+
+#### Workflows：repository variables
+
+兩個 workflow（`oci_retry.yml`、`oci_retry_micro.yml`）都需要兩個**非機密**的值。切到同一頁的
+**Variables** 頁籤（**Variables** → **New repository variable**）新增：
+
+| Variable 名稱 | 填入的值 |
+|---------------|----------|
+| `OCI_COMPARTMENT_ID` | 租用戶 OCID（見[取得 Compartment ID](#取得-compartment-id租用戶-ocid)）|
+| `OCI_SSH_PUBLIC_KEY` | `.pub` 檔案的完整內容 |
+
+> 這兩個值也可以改放在 secrets，workflow 會先讀 variable，沒有才讀 secret。另外可用
+> `OCI_INSTANCE_NAME`、`OCI_UBUNTU_VERSION`、`OCI_ARM_OCPUS`、`OCI_ARM_MEMORY_IN_GBS`、
+> `OCI_BOOT_VOLUME_SIZE_IN_GBS`、`OCI_RETRY_INTERVAL` 覆寫腳本預設值；這些選填變數由兩個
+> workflow 共用，除非真的需要不同值，否則建議不要設定。
 
 > 不需要另外建立 GitHub token：接力觸發下一個 Job 和自動停用，都是用 GitHub 每個 Job 自動產生的內建 `GITHUB_TOKEN`。
 
@@ -504,7 +585,7 @@ ssh -i 私密金鑰.pem ubuntu@公用IP
 
 ## 注意事項
 
-- `COMPARTMENT_ID` 和 `SSH_PUBLIC_KEY` 寫在腳本裡是安全的（非機密資訊）
+- `COMPARTMENT_ID` 和 `SSH_PUBLIC_KEY` 屬於非機密資訊，可直接放在 repository variables（或 secrets）；兩支腳本裡都不再包含這些值
 - OCI API 私密金鑰等敏感資訊全部放在 GitHub Secrets，不進版本控制
 - **2026-11-07 更新：** workflow 不再使用 `GH_PAT` secret。如果你在這個日期之前 fork 或複製了這個 repo，請用這個 repo 目前的版本取代你的 `.github/workflows/oci_retry.yml` 和 `.github/workflows/oci_retry_micro.yml`（腳本不需要更新），之後就可以刪掉 `GH_PAT` secret，並到 GitHub → Settings → Developer settings 撤銷（revoke）那組 token
 - `.pem` / `.key` / `.pub` 已加入 `.gitignore`，不會被 commit
